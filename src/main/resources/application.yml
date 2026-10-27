@@ -18,6 +18,6 @@ spring:
 
 agro:
   jwt:
-    # En produccion se inyecta por variable de entorno; minimo 32 bytes para HS256.
+    # En produccion se inyecta por variable de entorno; minimo 32 bytes (HMAC-SHA).
     secreto: ${JWT_SECRETO:agrosierra-pari-clave-secreta-para-firmar-tokens-2026}
     vigencia-minutos: ${JWT_VIGENCIA_MINUTOS:60}

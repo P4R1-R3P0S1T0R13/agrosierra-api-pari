@@ -15,7 +15,7 @@ import javax.crypto.SecretKey
 
 data class TokenEmitido(val token: String, val expiraEn: Instant)
 
-/** Firma (HS256) y verifica los tokens. El token transporta id, usuario, rol y privilegios. */
+/** Firma (HMAC-SHA, HS384 por el largo de la clave) y verifica los tokens. El token transporta id, usuario, rol y privilegios. */
 @Service
 class JwtService(
     @Value("\${agro.jwt.secreto}") secreto: String,
