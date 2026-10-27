@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional
 import pe.upeu.agrosierra.dominio.Labor
 import pe.upeu.agrosierra.dominio.Lote
 import pe.upeu.agrosierra.dominio.RecursoNoEncontradoException
+import pe.upeu.agrosierra.dominio.ReglaNegocioException
 import pe.upeu.agrosierra.dominio.TipoLabor
 import pe.upeu.agrosierra.dominio.ValidacionException
 import pe.upeu.agrosierra.repositorio.LaborRepository
@@ -34,6 +35,8 @@ class LaborService(
 
     fun registrar(req: LaborRequest, autor: UsuarioAutenticado): Labor {
         val datos = leer(req)
+        exigirCampaniaAbierta(datos.lote)
+        exigirDosisPermitida(datos)
         val labor = Labor(
             lote = datos.lote,
             tipo = datos.tipo,
@@ -49,6 +52,9 @@ class LaborService(
     fun corregir(id: Long, req: LaborRequest, autor: UsuarioAutenticado): Labor {
         val labor = obtener(id)
         val datos = leer(req)
+        exigirCampaniaAbierta(labor.lote)
+        exigirCampaniaAbierta(datos.lote)
+        exigirDosisPermitida(datos)
         labor.lote = datos.lote
         labor.tipo = datos.tipo
         labor.fecha = datos.fecha
@@ -60,6 +66,29 @@ class LaborService(
 
     fun eliminar(id: Long) {
         labores.delete(obtener(id))
+    }
+
+    /** RN-01: no se registra ni corrige ninguna labor sobre un lote con la campaña cerrada (409). */
+    private fun exigirCampaniaAbierta(lote: Lote) {
+        if (lote.campaniaCerrada) {
+            throw ReglaNegocioException(
+                "La campania del lote ${lote.codigo} esta cerrada: no se pueden registrar ni corregir labores",
+            )
+        }
+    }
+
+    /** RN-04: en una fumigación la cantidad no puede superar dosis máxima por ha x hectáreas (400 en cantidad). */
+    private fun exigirDosisPermitida(datos: DatosLabor) {
+        if (datos.tipo != TipoLabor.FUMIGACION) return
+        val maximo = datos.lote.dosisMaximaTotal()
+        if (datos.cantidad > maximo) {
+            throw ValidacionException(
+                mapOf(
+                    "cantidad" to "La dosis supera el maximo del lote: %.2f (%.2f por ha x %.2f ha)"
+                        .format(maximo, datos.lote.dosisMaximaPorHectarea, datos.lote.hectareas),
+                ),
+            )
+        }
     }
 
     private fun obtener(id: Long): Labor =
