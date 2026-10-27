@@ -7,13 +7,18 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import pe.upeu.agrosierra.dominio.Labor
 import pe.upeu.agrosierra.dominio.Lote
+import pe.upeu.agrosierra.dominio.OperacionNoPermitidaException
 import pe.upeu.agrosierra.dominio.RecursoNoEncontradoException
+import pe.upeu.agrosierra.dominio.ReglaNegocioException
 import pe.upeu.agrosierra.dominio.TipoLabor
 import pe.upeu.agrosierra.dominio.ValidacionException
 import pe.upeu.agrosierra.repositorio.LaborRepository
 import pe.upeu.agrosierra.repositorio.LoteRepository
+import pe.upeu.agrosierra.seguridad.Privilegio
 import pe.upeu.agrosierra.seguridad.UsuarioAutenticado
 import pe.upeu.agrosierra.web.dto.LaborRequest
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 
@@ -34,6 +39,8 @@ class LaborService(
 
     fun registrar(req: LaborRequest, autor: UsuarioAutenticado): Labor {
         val datos = leer(req)
+        exigirCampaniaAbierta(datos.lote)
+        exigirDosisPermitida(datos)
         val labor = Labor(
             lote = datos.lote,
             tipo = datos.tipo,
@@ -48,7 +55,11 @@ class LaborService(
 
     fun corregir(id: Long, req: LaborRequest, autor: UsuarioAutenticado): Labor {
         val labor = obtener(id)
+        exigirPermisoDeCorreccion(labor, autor)
         val datos = leer(req)
+        exigirCampaniaAbierta(labor.lote)
+        exigirCampaniaAbierta(datos.lote)
+        exigirDosisPermitida(datos)
         labor.lote = datos.lote
         labor.tipo = datos.tipo
         labor.fecha = datos.fecha
@@ -62,8 +73,50 @@ class LaborService(
         labores.delete(obtener(id))
     }
 
+    /**
+     * RN-02: quien no tiene LABOR_EDITAR_TODAS solo corrige las labores que él mismo registró
+     * y dentro de las 24 horas siguientes al registro (403). Se decide por privilegio, no por rol.
+     */
+    private fun exigirPermisoDeCorreccion(labor: Labor, autor: UsuarioAutenticado) {
+        if (autor.tiene(Privilegio.LABOR_EDITAR_TODAS)) return
+        if (labor.registradoPor != autor.usuario) {
+            throw OperacionNoPermitidaException("Solo puede corregir las labores que usted registro")
+        }
+        val limite = labor.registradoEn.plus(PLAZO_CORRECCION)
+        if (Instant.now().isAfter(limite)) {
+            throw OperacionNoPermitidaException("Vencio el plazo de 24 horas para corregir esta labor")
+        }
+    }
+
+    /** RN-01: no se registra ni corrige ninguna labor sobre un lote con la campaña cerrada (409). */
+    private fun exigirCampaniaAbierta(lote: Lote) {
+        if (lote.campaniaCerrada) {
+            throw ReglaNegocioException(
+                "La campania del lote ${lote.codigo} esta cerrada: no se pueden registrar ni corregir labores",
+            )
+        }
+    }
+
+    /** RN-04: en una fumigación la cantidad no puede superar dosis máxima por ha x hectáreas (400 en cantidad). */
+    private fun exigirDosisPermitida(datos: DatosLabor) {
+        if (datos.tipo != TipoLabor.FUMIGACION) return
+        val maximo = datos.lote.dosisMaximaTotal()
+        if (datos.cantidad > maximo) {
+            throw ValidacionException(
+                mapOf(
+                    "cantidad" to "La dosis supera el maximo del lote: %.2f (%.2f por ha x %.2f ha)"
+                        .format(maximo, datos.lote.dosisMaximaPorHectarea, datos.lote.hectareas),
+                ),
+            )
+        }
+    }
+
     private fun obtener(id: Long): Labor =
         labores.findByIdOrNull(id) ?: throw RecursoNoEncontradoException("La labor $id no existe")
+
+    companion object {
+        val PLAZO_CORRECCION: Duration = Duration.ofHours(24)
+    }
 
     private data class DatosLabor(
         val lote: Lote,

@@ -2,6 +2,7 @@ package pe.upeu.agrosierra.web
 
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -28,6 +29,10 @@ class LoteController(
 
     @GetMapping("/{id}")
     fun detalle(@PathVariable id: Long): LoteDto = LoteDto.de(loteService.obtener(id))
+
+    /** RF-B06: solo con CAMPANIA_CERRAR (SecurityConfig); RN-03 se valida en LoteService. */
+    @PostMapping("/{id}/cerrar-campania")
+    fun cerrarCampania(@PathVariable id: Long): LoteDto = LoteDto.de(loteService.cerrarCampania(id))
 
     @GetMapping("/{id}/labores")
     fun labores(
