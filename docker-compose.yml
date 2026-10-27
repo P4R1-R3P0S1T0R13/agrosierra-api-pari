@@ -19,6 +19,7 @@ services:
   api:
     build: .
     container_name: agrosierra-api-pari
+    restart: on-failure
     depends_on:
       db:
         condition: service_healthy
@@ -26,6 +27,7 @@ services:
       DB_URL: jdbc:postgresql://db:5432/agrosierra
       DB_USER: agro
       DB_PASSWORD: agro2026
+      JWT_SECRETO: ${JWT_SECRETO:-agrosierra-pari-clave-secreta-para-firmar-tokens-2026}
     ports:
       - "8080:8080"
 
