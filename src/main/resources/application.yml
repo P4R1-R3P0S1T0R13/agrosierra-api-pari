@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: agrosierra-api-pari
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/agrosierra}
+    username: ${DB_USER:agro}
+    password: ${DB_PASSWORD:agro2026}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+agro:
+  jwt:
+    # En produccion se inyecta por variable de entorno; minimo 32 bytes para HS256.
+    secreto: ${JWT_SECRETO:agrosierra-pari-clave-secreta-para-firmar-tokens-2026}
+    vigencia-minutos: ${JWT_VIGENCIA_MINUTOS:60}
